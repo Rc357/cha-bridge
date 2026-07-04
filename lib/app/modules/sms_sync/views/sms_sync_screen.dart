@@ -967,6 +967,36 @@ class _SettingsPanel extends StatelessWidget {
 
   final SmsSyncController controller;
 
+  Future<void> _confirmResetSyncSettings(BuildContext context) async {
+    final shouldReset = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Reset Sync Settings?'),
+          content: const Text(
+            'This restores recommended defaults for call-log sync intervals, '
+            'background sync, resume sync, and biometric inbox unlock. '
+            'Incoming SMS auto-sync stays active when SMS permission is granted.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Reset'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldReset == true) {
+      await controller.resetSyncSettingsToDefaults();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeController = Get.find<AppThemeController>();
@@ -1135,6 +1165,14 @@ class _SettingsPanel extends StatelessWidget {
             ),
             trailing: Text('${controller.backgroundSyncIntervalMinutes.value}m'),
           ),
+        ),
+        ListTile(
+          leading: const Icon(Icons.restart_alt),
+          title: const Text('Reset sync settings'),
+          subtitle: const Text(
+            'Restore recommended defaults. Incoming SMS auto-sync stays active.',
+          ),
+          onTap: () => _confirmResetSyncSettings(context),
         ),
         const Divider(height: 1),
         Obx(

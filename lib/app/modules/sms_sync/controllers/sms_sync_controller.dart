@@ -546,6 +546,31 @@ class SmsSyncController extends GetxController {
             : 'Biometric unlock disabled.';
   }
 
+  Future<void> resetSyncSettingsToDefaults() async {
+    autoSyncOnResume.value = false;
+    periodicSyncEnabled.value = false;
+    periodicSyncIntervalMinutes.value = 15;
+    backgroundSyncEnabled.value = false;
+    backgroundSyncIntervalMinutes.value = 15;
+    biometricUnlockEnabled.value = false;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_prefAutoSyncOnResume, false);
+    await prefs.setBool(_prefPeriodicSync, false);
+    await prefs.setInt(_prefPeriodicSyncMinutes, 15);
+    await prefs.setBool(_prefBackgroundSync, false);
+    await prefs.setInt(_prefBackgroundSyncMinutes, 15);
+    await prefs.setBool(_prefBiometricUnlock, false);
+
+    _configurePeriodicTimer();
+    await SmsSyncBackgroundScheduler.setEnabled(false);
+    await SmsSyncRelayService.setEnabled(false);
+    await refreshBatteryOptimizationStatus(silent: true);
+
+    status.value =
+        'Sync settings reset. Incoming SMS auto-sync remains active when SMS permission is granted.';
+  }
+
   Future<void> refreshBatteryOptimizationStatus({bool silent = false}) async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
       batteryOptimizationIgnored.value = true;
