@@ -11,10 +11,10 @@ import 'chat_sync_app.dart';
 import 'modules/sms_sync/services/sms_sync_background.dart';
 
 Future<void> runChaBridgeApp(AppFlavor flavor) async {
-  WidgetsFlutterBinding.ensureInitialized();
-
   await runZonedGuarded<Future<void>>(
     () async {
+      WidgetsFlutterBinding.ensureInitialized();
+
       await SystemChrome.setPreferredOrientations([
         DeviceOrientation.portraitUp,
       ]);

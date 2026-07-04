@@ -1072,7 +1072,7 @@ class _SettingsPanel extends StatelessWidget {
           () => SwitchListTile(
             title: const Text('Auto-sync on open/resume'),
             subtitle: const Text(
-              'Sync SMS + calls on this default inbox when app opens/resumes',
+              'Sync call logs when app opens/resumes. Incoming SMS syncs on receive.',
             ),
             value: controller.autoSyncOnResume.value,
             onChanged: controller.setAutoSyncOnResume,
@@ -1081,7 +1081,7 @@ class _SettingsPanel extends StatelessWidget {
         const Divider(height: 1),
         Obx(
           () => SwitchListTile(
-            title: const Text('Periodic sync while open'),
+            title: const Text('Periodic call sync while open'),
             subtitle: Text(
               'Every ${controller.periodicSyncIntervalMinutes.value} minutes',
             ),
@@ -1091,7 +1091,7 @@ class _SettingsPanel extends StatelessWidget {
         ),
         Obx(
           () => ListTile(
-            title: const Text('Foreground sync interval'),
+            title: const Text('Foreground call sync interval'),
             subtitle: Slider(
               value: controller.periodicSyncIntervalMinutes.value.toDouble(),
               min: 1,
@@ -1109,11 +1109,11 @@ class _SettingsPanel extends StatelessWidget {
         const Divider(height: 1),
         Obx(
           () => SwitchListTile(
-            title: const Text('Background sync (Android)'),
+            title: const Text('Background call sync (Android)'),
             subtitle: Text(
               controller.backgroundSyncIntervalMinutes.value < 15
-                  ? 'Relay mode every ${controller.backgroundSyncIntervalMinutes.value} min (persistent notification)'
-                  : 'WorkManager every ${controller.backgroundSyncIntervalMinutes.value} minutes',
+                  ? 'Relay mode every ${controller.backgroundSyncIntervalMinutes.value} min. Incoming SMS syncs on receive.'
+                  : 'WorkManager every ${controller.backgroundSyncIntervalMinutes.value} min. Incoming SMS syncs on receive.',
             ),
             value: controller.backgroundSyncEnabled.value,
             onChanged: controller.setBackgroundSyncEnabled,
@@ -1121,7 +1121,7 @@ class _SettingsPanel extends StatelessWidget {
         ),
         Obx(
           () => ListTile(
-            title: const Text('Background sync interval'),
+            title: const Text('Background call sync interval'),
             subtitle: Slider(
               value: controller.backgroundSyncIntervalMinutes.value.toDouble(),
               min: 1,

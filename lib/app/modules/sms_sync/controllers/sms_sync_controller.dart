@@ -10,6 +10,7 @@ import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/sms_sync_background.dart';
+import '../services/sms_sync_debug_log.dart';
 import '../services/sms_sync_incoming_trigger.dart';
 import '../services/sms_sync_relay_service.dart';
 import '../services/sms_sync_service.dart';
@@ -455,7 +456,7 @@ class SmsSyncController extends GetxController {
 
     status.value =
         enabled
-            ? 'Periodic auto-sync enabled (every ${periodicSyncIntervalMinutes.value} min while app is open).'
+            ? 'Periodic call-log sync enabled (every ${periodicSyncIntervalMinutes.value} min while app is open). Incoming SMS uses the native receiver.'
             : 'Periodic auto-sync disabled.';
   }
 
@@ -465,7 +466,7 @@ class SmsSyncController extends GetxController {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_prefPeriodicSyncMinutes, safe);
     _configurePeriodicTimer();
-    status.value = 'Foreground sync interval set to every $safe minutes.';
+    status.value = 'Foreground call-log sync interval set to every $safe minutes.';
   }
 
   Future<void> setBackgroundSyncEnabled(bool enabled) async {
@@ -816,7 +817,13 @@ class SmsSyncController extends GetxController {
   }
 
   Future<void> syncAll({String trigger = 'manual'}) async {
-    await syncSms(trigger: trigger);
+    if (trigger == 'manual') {
+      await syncSms(trigger: trigger);
+    } else {
+      await SmsSyncDebugLog.append(
+        'Skipping SMS scan for $trigger; incoming SMS is handled by native receiver.',
+      );
+    }
     await syncCalls(trigger: trigger);
   }
 

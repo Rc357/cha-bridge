@@ -45,14 +45,9 @@ void smsSyncBackgroundDispatcher() {
       final service = SmsSyncService();
       final trigger = (inputData?['trigger'] as String?)?.trim() ?? '';
       final syncKey = await _resolveTargetSyncKey();
-      int smsCount;
+      const smsCount = 0;
       int callCount;
       if (syncKey.isNotEmpty) {
-        smsCount = await service.syncInboxByKey(
-          syncKey,
-          requestPermission: false,
-          limit: 50,
-        );
         callCount =
             trigger == 'sms_received'
                 ? 0
@@ -62,10 +57,6 @@ void smsSyncBackgroundDispatcher() {
                   limit: 50,
                 );
       } else {
-        smsCount = await service.syncAllInboxesForCurrentUser(
-          requestPermission: false,
-          limit: 50,
-        );
         callCount =
             trigger == 'sms_received'
                 ? 0
@@ -75,7 +66,7 @@ void smsSyncBackgroundDispatcher() {
                 );
       }
       await SmsSyncDebugLog.append(
-        'WorkManager sync finished: trigger=$trigger key=$syncKey sms=$smsCount calls=$callCount',
+        'WorkManager sync finished: trigger=$trigger key=$syncKey sms=native-receiver calls=$callCount',
       );
       if (smsCount < 0 || callCount < 0) {
         await SmsSyncDebugLog.append(

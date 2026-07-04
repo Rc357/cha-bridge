@@ -1,121 +1,116 @@
 # Cha Bridge
 
-Cha Bridge is an Android-only Flutter app for syncing a phone's SMS inbox and
-call history into Firebase Firestore. It is built around authenticated "Chat
-Inboxes": each inbox has a Firebase sync key, and the phone uploads SMS and call
-records into that sync key so they can be viewed again after sign-in.
+Cha Bridge is an Android-only Flutter app for people who use more than one
+phone and still need access to SMS OTPs, messages, and call history when a
+device is somewhere else.
 
-The project follows the local mobile-boilerplate flavor layout with separate
-development, staging, and production Dart entrypoints.
+Install Cha Bridge on the phone that receives SMS, sign in, choose a shared
+inbox, and incoming SMS messages are uploaded to Firebase Firestore. Open the
+same inbox from another signed-in device to see the messages through Firestore's
+real-time stream.
 
-## What it does
+## What The App Does
 
-- Authenticates users with Firebase Email/Password or Google Sign-In.
-- Supports saved email/password login with device biometrics.
-- Lets a signed-in user create, select, protect, and delete Chat Inboxes.
-- Reads Android SMS inbox messages with runtime permission.
-- Reads Android call logs with runtime permission.
-- Uploads SMS records to `sync_keys/{syncKey}/sms/{smsId}`.
-- Uploads call records to `sync_keys/{syncKey}/calls/{callId}`.
-- Stores user inbox metadata under `users/{uid}/inboxes/{syncKey}`.
-- Supports manual sync, sync on app resume, in-app periodic sync, WorkManager
-  background sync, incoming-SMS-triggered sync, and a foreground relay service.
-- Stores app settings such as selected/default inbox and sync intervals in local
-  preferences.
+- Syncs incoming Android SMS messages automatically when they are received.
+- Lets multiple signed-in devices open the same shared inbox.
+- Shows synced SMS and call logs from Firebase in real time.
+- Supports manual SMS and call-log sync when you want to backfill history.
+- Supports multiple chat inboxes per account.
+- Lets users set a default inbox for automatic background uploads.
+- Supports password-protected inboxes.
+- Supports biometric login and biometric unlock for protected inboxes.
+- Supports light and dark themes.
+- Uses Android product flavors for development, staging, and production builds.
 
-## Security model
+The main use case is OTP relay: leave one Android phone at home, receive the OTP
+there, and read it from another device logged into the same Cha Bridge account
+and inbox.
 
-The Dart sync path initializes `DataCipher` and encrypts sensitive text fields
-before upload:
+## How SMS Sync Works
 
-- SMS `address` and `body`
-- Call `number`, `name`, and `callType`
+Cha Bridge has two SMS sync paths:
 
-The encryption key is stored locally in Flutter Secure Storage and mirrored to
-`users/{uid}/secrets/dataCipher` so the same account can decrypt synced data
-across app sessions/devices.
+- **Incoming SMS auto-sync:** a native Android `BroadcastReceiver` receives
+  `SMS_RECEIVED`, resolves the selected/default inbox, and uploads the received
+  message directly to Firestore.
+- **Manual/backfill sync:** the Flutter app reads the Android SMS inbox and
+  uploads recent unsynced messages.
 
-Inbox passwords are stored as SHA-256 hashes in the user's inbox document.
-Biometric unlock is available for protected inboxes when enabled in the app.
+The native receiver also advances the local last-sync marker so reopening the
+app does not re-upload the same SMS during resume sync.
 
-Current caveat: the native Android `ChaBridgeSmsSyncWorker` path writes SMS
-fields directly from Kotlin and does not use the Dart `DataCipher`. Prefer the
-Dart sync/relay paths for encrypted uploads unless the native worker is updated
-to use the same encryption scheme.
+## What Gets Synced
 
-## Firebase data layout
+SMS documents are stored under:
+
+```text
+sync_keys/{syncKey}/sms/{smsId}
+```
+
+Call log documents are stored under:
+
+```text
+sync_keys/{syncKey}/calls/{callId}
+```
+
+Inbox metadata is stored under:
 
 ```text
 users/{uid}/inboxes/{syncKey}
-  name
-  syncKey
-  isPasswordProtected?
-  passwordHash?
-  isDeleted
-  deletedAt
-  createdAt
-
-users/{uid}/secrets/dataCipher
-  keyBase64
-  updatedAt
-
-sync_keys/{syncKey}
-  ownerUid
-  name
-  isDeleted
-  deletedAt
-  createdAt
-
-sync_keys/{syncKey}/sms/{smsId}
-  address
-  body
-  threadId
-  smsDate
-  uploadedAt
-  source
-
-sync_keys/{syncKey}/calls/{callId}
-  number
-  name
-  callType
-  durationSec
-  callDate
-  uploadedAt
-  source
 ```
 
-Firestore rules are defined in `firestore.rules`.
+## Authentication
 
-## Platform support
+The app uses Firebase Authentication:
 
-Android is the supported production target. The app requests these capabilities
-through `android/app/src/main/AndroidManifest.xml`:
+- Email/password sign-in and registration
+- Google Sign-In
+- Saved credential login with biometrics
 
-- Internet access
-- SMS read/receive access
-- Call log read access
-- Biometric authentication
-- Notifications and foreground data-sync service support
-- Wake lock, boot completed, and battery optimization exemption support
+The phone must be signed in at least once so automatic background SMS upload has
+a Firebase user session and a selected/default inbox to target.
 
-The app requires runtime permission grants from the user before reading SMS or
-call logs.
+## Privacy And Security
 
-No iOS platform files are kept in this repository. Apple does not allow
-third-party apps to read the system SMS inbox, and this app's core sync features
-depend on Android SMS and call-log APIs.
+The Dart sync path uses `DataCipher` to encrypt sensitive fields before upload:
 
-## Firebase setup
+- SMS sender address and body
+- Call number, contact name, and call type
+
+The encryption key is stored in Flutter Secure Storage and mirrored to:
+
+```text
+users/{uid}/secrets/dataCipher
+```
+
+Current caveat: the native incoming-SMS auto-upload path writes SMS fields from
+Kotlin and does not yet use the Dart `DataCipher`. Manual/backfill Dart sync
+does encrypt. Native encryption should be added before treating the automatic
+receiver path as end-to-end protected.
+
+## Android Only
+
+Cha Bridge depends on Android SMS and call-log APIs:
+
+- `READ_SMS`
+- `RECEIVE_SMS`
+- `READ_CALL_LOG`
+- foreground/background sync permissions
+- biometric authentication
+
+iOS is not supported because Apple does not allow third-party apps to read the
+system SMS inbox.
+
+## Firebase Setup
 
 1. Create a Firebase project.
 2. Add an Android app.
 3. Download `google-services.json`.
 4. Place it at `android/app/google-services.json`.
-5. Enable Firebase Authentication providers:
+5. Enable Firebase Authentication:
    - Email/Password
    - Google
-6. Configure Google Sign-In for Android, including the required SHA certificate
-   fingerprints in Firebase.
+6. Add the required Android SHA fingerprints for Google Sign-In.
 7. Enable Cloud Firestore.
 8. Deploy the included Firestore rules:
 
@@ -123,7 +118,7 @@ depend on Android SMS and call-log APIs.
 firebase deploy --only firestore:rules --project cha-bridge
 ```
 
-## Run locally
+## Run
 
 Install dependencies:
 
@@ -131,24 +126,24 @@ Install dependencies:
 flutter pub get
 ```
 
-Run on an Android device:
+Run production on a real Android phone:
 
 ```bash
 flutter run -t lib/main_production.dart --flavor=production
 ```
 
-Android SMS and call log permissions are device-only features, so use a real
-Android phone for end-to-end testing.
+SMS and call-log permissions require a real Android device for end-to-end
+testing.
 
-## Flavors
+## Build Flavors
 
-The Android app has three Gradle product flavors:
+The Android app has three flavors:
 
-- `development` - package suffix `.dev`, app label `DEV Cha Bridge`
-- `staging` - package suffix `.stg`, app label `STG Cha Bridge`
-- `production` - package `com.chabridge`, app label `Cha Bridge`
+- `development` - `com.chabridge.dev`, app label `DEV Cha Bridge`
+- `staging` - `com.chabridge.stg`, app label `STG Cha Bridge`
+- `production` - `com.chabridge`, app label `Cha Bridge`
 
-Use the matching Dart entrypoint for each flavor:
+Run a flavor:
 
 ```bash
 flutter run -t lib/main_development.dart --flavor=development
@@ -156,7 +151,7 @@ flutter run -t lib/main_staging.dart --flavor=staging
 flutter run -t lib/main_production.dart --flavor=production
 ```
 
-Build APKs with:
+Build APKs:
 
 ```bash
 flutter build apk -t lib/main_development.dart --flavor=development
@@ -164,61 +159,51 @@ flutter build apk -t lib/main_staging.dart --flavor=staging
 flutter build apk -t lib/main_production.dart --flavor=production
 ```
 
-If you keep the `.dev` and `.stg` package suffixes, Firebase must include
-Android app clients for `com.chabridge.dev` and `com.chabridge.stg` in
-`android/app/google-services.json`.
+If you use development or staging, add Firebase Android clients for
+`com.chabridge.dev` and `com.chabridge.stg` and download an updated
+`google-services.json`.
 
-## Background sync modes
+## Project Structure
 
-Cha Bridge has several sync paths:
+```text
+lib/
+  app/
+    modules/
+      auth/
+        bindings/
+        controllers/
+        views/
+      sms_sync/
+        bindings/
+        controllers/
+        services/
+        views/
+    services/security/
+    widgets/
+  main_development.dart
+  main_staging.dart
+  main_production.dart
 
-- Manual sync from the app UI.
-- App-resume sync when enabled.
-- In-app periodic sync while the app process is alive.
-- WorkManager periodic background sync with network connectivity constraints.
-- Incoming SMS trigger through Android receivers and the Telephony listener.
-- Foreground relay service using `flutter_foreground_task`, with a persistent
-  notification and battery optimization handling.
+android/app/src/main/kotlin/com/chabridge/
+  ChaBridgeSmsReceiver.kt
+  ChaBridgeSmsSyncWorker.kt
+  MainActivity.kt
+```
 
-Background sync depends on Android version, notification permission, battery
-optimization settings, and whether Firebase authentication can be restored from
-saved credentials.
+Key files:
 
-## Important source files
+- `ChaBridgeSmsReceiver.kt` - native Android incoming-SMS auto-upload.
+- `sms_sync_service.dart` - Dart SMS/call-log backfill sync and encryption path.
+- `sms_sync_controller.dart` - inbox selection, sync settings, and UI state.
+- `data_cipher.dart` - AES encryption helper for Dart-side sync.
+- `firestore.rules` - Firestore access rules.
 
-- `lib/main.dart` - default production app entrypoint.
-- `lib/main_development.dart`, `lib/main_staging.dart`,
-  `lib/main_production.dart` - flavor-specific entrypoints.
-- `lib/app/app_runner.dart` - shared bootstrap for orientation, WorkManager, and
-  foreground-task setup.
-- `lib/app/app_flavor.dart` - flavor metadata used by Dart entrypoints.
-- `lib/app/chat_sync_app.dart` - Material app, theme, and bootstrap screen.
-- `lib/app/app_bootstrap_screen.dart` - Firebase initialization gate.
-- `lib/app/modules/auth/bindings/` - GetX dependency binding for auth.
-- `lib/app/modules/auth/controllers/` - auth controller.
-- `lib/app/modules/auth/views/` - auth gate and login/register UI.
-- `lib/app/modules/sms_sync/bindings/` - GetX dependency binding for SMS sync.
-- `lib/app/modules/sms_sync/controllers/` - inbox management, sync settings,
-  background/relay toggles, protected inbox logic.
-- `lib/app/modules/sms_sync/views/` - main inbox and sync UI.
-- `lib/app/modules/sms_sync/services/` - SMS/call permission checks, local
-  reads, encryption, Firestore writes, WorkManager background dispatcher,
-  incoming SMS trigger, and foreground relay sync.
-- `lib/app/services/security/data_cipher.dart` - AES encryption key management
-  and encrypt/decrypt helpers.
-- `lib/app/widgets/` - shared app widgets such as the Cha Bridge logo.
-- `android/app/build.gradle.kts` - Android flavor and dependency setup.
-- `android/app/src/main/kotlin/com/chabridge/` - native Android SMS receiver
-  and worker integration.
+## Current Limitations
 
-## Notes for maintainers
-
-- The package name in `pubspec.yaml` is `sms_sync_app`, while the user-facing
-  app name is Cha Bridge.
-- The app stores saved login credentials in Flutter Secure Storage to support
-  biometric login and background auth restore.
-- Firestore rules allow a signed-in owner, or a user with an inbox document for
-  that sync key, to access the related sync data.
-- Deleted inboxes are soft-deleted with `isDeleted` and `deletedAt`.
-- SMS and call document IDs are SHA-1 hashes of stable record fields to reduce
-  duplicate uploads.
+- Native incoming-SMS upload is not encrypted yet.
+- Automatic SMS upload requires a signed-in Firebase user on the receiving
+  phone.
+- The receiving phone must have SMS permission granted and a selected/default
+  inbox.
+- Android battery optimization and OEM background restrictions can affect
+  background behavior on some devices.

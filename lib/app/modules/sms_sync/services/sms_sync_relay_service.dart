@@ -68,10 +68,7 @@ class SmsSyncRelayTaskHandler extends TaskHandler {
       }
 
       final service = SmsSyncService();
-      final smsCount = await service.syncInboxByKey(
-        syncKey,
-        requestPermission: false,
-      );
+      const smsCount = 0;
       final callCount = await service.syncCallsByKey(
         syncKey,
         requestPermission: false,
@@ -89,11 +86,11 @@ class SmsSyncRelayTaskHandler extends TaskHandler {
       }
 
       await SmsSyncDebugLog.append(
-        'Relay sync success: key=$syncKey sms=$smsCount calls=$callCount',
+        'Relay sync success: key=$syncKey sms=native-receiver calls=$callCount',
       );
       await FlutterForegroundTask.updateService(
         notificationTitle: 'Cha Bridge relay active',
-        notificationText: 'Last sync: SMS $smsCount, Calls $callCount',
+        notificationText: 'SMS handled on receive, Calls $callCount',
       );
     } catch (e) {
       await SmsSyncDebugLog.append('Relay sync error: $e');
