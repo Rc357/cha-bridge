@@ -1,0 +1,151 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid}/inboxes/{syncKey} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow create, update: if isSignedIn() &&
+          request.auth.uid == uid &&
+          request.resource.data.keys().hasOnly([
+            'name',
+            'syncKey',
+            'isPasswordProtected',
+            'passwordHash',
+            'isDeleted',
+            'deletedAt',
+            'createdAt'
+          ]) &&
+          request.resource.data.name is string &&
+          request.resource.data.syncKey is string &&
+          request.resource.data.syncKey == syncKey &&
+          (!request.resource.data.keys().hasAny(['isPasswordProtected']) ||
+              request.resource.data.isPasswordProtected is bool) &&
+          (!request.resource.data.keys().hasAny(['isDeleted']) ||
+              request.resource.data.isDeleted is bool) &&
+          (!request.resource.data.keys().hasAny(['passwordHash']) ||
+              request.resource.data.passwordHash is string ||
+              request.resource.data.passwordHash == null) &&
+          (!request.resource.data.keys().hasAny(['deletedAt']) ||
+              request.resource.data.deletedAt is timestamp ||
+              request.resource.data.deletedAt == null);
+      allow delete: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    match /users/{uid}/secrets/{docId} {
+      allow read, create, update, delete: if isSignedIn() &&
+          request.auth.uid == uid;
+    }
+
+    match /users/{uid}/settings/{docId} {
+      allow read, create, update, delete: if isSignedIn() &&
+          request.auth.uid == uid;
+    }
+
+    match /sync_keys/{syncKey} {
+      allow read: if canAccessSyncKey(syncKey);
+      allow create: if isSignedIn() &&
+          !exists(/databases/$(database)/documents/sync_keys/$(syncKey)) &&
+          request.resource.data.keys().hasOnly([
+            'ownerUid',
+            'name',
+            'isDeleted',
+            'deletedAt',
+            'createdAt'
+          ]) &&
+          request.resource.data.ownerUid == request.auth.uid &&
+          request.resource.data.name is string &&
+          (!request.resource.data.keys().hasAny(['isDeleted']) ||
+              request.resource.data.isDeleted is bool) &&
+          (!request.resource.data.keys().hasAny(['deletedAt']) ||
+              request.resource.data.deletedAt is timestamp ||
+              request.resource.data.deletedAt == null);
+      allow update: if isSignedIn() &&
+          resource.data.ownerUid == request.auth.uid &&
+          request.resource.data.keys().hasOnly([
+            'ownerUid',
+            'name',
+            'isDeleted',
+            'deletedAt',
+            'createdAt'
+          ]) &&
+          request.resource.data.ownerUid == request.auth.uid &&
+          request.resource.data.name is string &&
+          (!request.resource.data.keys().hasAny(['isDeleted']) ||
+              request.resource.data.isDeleted is bool) &&
+          (!request.resource.data.keys().hasAny(['deletedAt']) ||
+              request.resource.data.deletedAt is timestamp ||
+              request.resource.data.deletedAt == null);
+      allow delete: if isSignedIn() &&
+          resource.data.ownerUid == request.auth.uid;
+    }
+
+    match /sync_keys/{syncKey}/sms/{smsId} {
+      allow read: if canAccessSyncKey(syncKey);
+      allow write: if canAccessSyncKey(syncKey) && isValidIncomingSmsDoc();
+      allow delete: if isSignedIn() && isSyncKeyOwner(syncKey);
+    }
+
+    match /sync_keys/{syncKey}/calls/{callId} {
+      allow read: if canAccessSyncKey(syncKey);
+      allow write: if canAccessSyncKey(syncKey) && isValidIncomingCallDoc();
+      allow delete: if isSignedIn() && isSyncKeyOwner(syncKey);
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userHasInbox(syncKey) {
+      return isSignedIn() &&
+          exists(
+            /databases/$(database)/documents/users/$(request.auth.uid)/inboxes/$(syncKey)
+          );
+    }
+
+    function canAccessSyncKey(syncKey) {
+      return isSignedIn() && (isSyncKeyOwner(syncKey) || userHasInbox(syncKey));
+    }
+
+    function isSyncKeyOwner(syncKey) {
+      return isSignedIn() &&
+          exists(/databases/$(database)/documents/sync_keys/$(syncKey)) &&
+          get(/databases/$(database)/documents/sync_keys/$(syncKey)).data.ownerUid ==
+              request.auth.uid;
+    }
+
+    function isValidIncomingSmsDoc() {
+      return request.resource.data.keys().hasOnly([
+            'address',
+            'body',
+            'threadId',
+            'smsDate',
+            'uploadedAt',
+            'source'
+          ]) &&
+          request.resource.data.address is string &&
+          request.resource.data.body is string &&
+          (request.resource.data.threadId is int ||
+              request.resource.data.threadId == null) &&
+          request.resource.data.smsDate is timestamp &&
+          request.resource.data.source == 'android';
+    }
+
+    function isValidIncomingCallDoc() {
+      return request.resource.data.keys().hasOnly([
+            'number',
+            'name',
+            'callType',
+            'durationSec',
+            'callDate',
+            'uploadedAt',
+            'source'
+          ]) &&
+          request.resource.data.number is string &&
+          (request.resource.data.name is string ||
+              request.resource.data.name == null) &&
+          request.resource.data.callType is string &&
+          request.resource.data.durationSec is int &&
+          request.resource.data.callDate is timestamp &&
+          request.resource.data.source == 'android';
+    }
+  }
+}
