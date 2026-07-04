@@ -13,9 +13,14 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import org.json.JSONArray
+import java.security.SecureRandom
 import java.security.MessageDigest
+import java.util.Base64
 import java.util.Date
 import java.util.concurrent.Executors
+import javax.crypto.Cipher
+import javax.crypto.spec.IvParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 class ChaBridgeSmsReceiver : BroadcastReceiver() {
     companion object {
@@ -26,6 +31,7 @@ class ChaBridgeSmsReceiver : BroadcastReceiver() {
         private const val PREF_SELECTED_SYNC_KEY = "flutter.selected_sync_key_fallback"
         private const val PREF_LAST_SMS_SYNC_PREFIX = "flutter.last_sms_sync_ms_"
         private const val PREF_NATIVE_DEBUG_LOGS = "flutter.sms_sync_native_debug_logs_v1"
+        private const val REMOTE_CIPHER_DOC_ID = "dataCipher"
         private const val NATIVE_SYNC_MARKER_SAFETY_MS = 60_000L
         private const val MAX_DEBUG_LOGS = 120
     }
@@ -69,6 +75,7 @@ class ChaBridgeSmsReceiver : BroadcastReceiver() {
                 }
 
                 val batch = db.batch()
+                val keyBase64 = resolveCipherKeyBase64(user.uid, db)
                 var count = 0
                 var maxSyncedMs = 0L
                 for (message in messages) {
@@ -83,8 +90,8 @@ class ChaBridgeSmsReceiver : BroadcastReceiver() {
                         .document(docId)
 
                     val payload = hashMapOf<String, Any?>(
-                        "address" to address,
-                        "body" to body,
+                        "address" to encryptText(address, keyBase64),
+                        "body" to encryptText(body, keyBase64),
                         "threadId" to null,
                         "smsDate" to Timestamp(Date(smsDate)),
                         "uploadedAt" to FieldValue.serverTimestamp(),
@@ -114,6 +121,48 @@ class ChaBridgeSmsReceiver : BroadcastReceiver() {
                 pendingResult.finish()
             }
         }
+    }
+
+    private fun resolveCipherKeyBase64(uid: String, db: FirebaseFirestore): String {
+        val secretRef = db.collection("users")
+            .document(uid)
+            .collection("secrets")
+            .document(REMOTE_CIPHER_DOC_ID)
+
+        val secretDoc = Tasks.await(secretRef.get())
+        val remoteKey = secretDoc.getString("keyBase64")?.trim().orEmpty()
+        if (remoteKey.isNotEmpty()) {
+            return remoteKey
+        }
+
+        val keyBytes = ByteArray(32)
+        SecureRandom().nextBytes(keyBytes)
+        val generatedKey = Base64.getEncoder().encodeToString(keyBytes)
+        Tasks.await(
+            secretRef.set(
+                mapOf(
+                    "keyBase64" to generatedKey,
+                    "updatedAt" to FieldValue.serverTimestamp(),
+                ),
+                SetOptions.merge(),
+            ),
+        )
+        return generatedKey
+    }
+
+    private fun encryptText(plainText: String, keyBase64: String): String {
+        val keyBytes = Base64.getDecoder().decode(keyBase64)
+        val ivBytes = ByteArray(16)
+        SecureRandom().nextBytes(ivBytes)
+
+        val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
+        cipher.init(
+            Cipher.ENCRYPT_MODE,
+            SecretKeySpec(keyBytes, "AES"),
+            IvParameterSpec(ivBytes),
+        )
+        val encryptedBytes = cipher.doFinal(plainText.toByteArray(Charsets.UTF_8))
+        return "${Base64.getEncoder().encodeToString(ivBytes)}:${Base64.getEncoder().encodeToString(encryptedBytes)}"
     }
 
     private fun resolveSyncKey(

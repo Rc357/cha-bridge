@@ -72,21 +72,21 @@ a Firebase user session and a selected/default inbox to target.
 
 ## Privacy And Security
 
-The Dart sync path uses `DataCipher` to encrypt sensitive fields before upload:
+Cha Bridge encrypts sensitive synced fields before upload:
 
 - SMS sender address and body
 - Call number, contact name, and call type
 
-The encryption key is stored in Flutter Secure Storage and mirrored to:
+The Dart sync path uses `DataCipher`. The native Android incoming-SMS receiver
+uses matching AES-CBC encryption and the same account cipher key. The key is
+stored in Flutter Secure Storage on the Dart side and mirrored to:
 
 ```text
 users/{uid}/secrets/dataCipher
 ```
 
-Current caveat: the native incoming-SMS auto-upload path writes SMS fields from
-Kotlin and does not yet use the Dart `DataCipher`. Manual/backfill Dart sync
-does encrypt. Native encryption should be added before treating the automatic
-receiver path as end-to-end protected.
+This lets another signed-in device decrypt synced SMS/call data for the same
+account.
 
 ## Android Only
 
@@ -200,7 +200,6 @@ Key files:
 
 ## Current Limitations
 
-- Native incoming-SMS upload is not encrypted yet.
 - Automatic SMS upload requires a signed-in Firebase user on the receiving
   phone.
 - The receiving phone must have SMS permission granted and a selected/default
